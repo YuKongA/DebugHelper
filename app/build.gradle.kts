@@ -22,6 +22,9 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    implementation(libs.google.guava)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.miuix.navigation3.ui)
 }
 
 android {

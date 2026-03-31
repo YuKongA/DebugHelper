@@ -88,7 +88,7 @@ fun Sensor.Show(onTestClick: (Sensor) -> Unit) {
         onClick = {
             showDialog = true
         },
-        rightActions = {
+        endActions = {
             if (sensor.batchable()) {
                 Icon(
                     imageVector = MiuixIcons.Basic.ArrowRight,
@@ -212,11 +212,9 @@ fun Sensor.batchable(): Boolean {
     return when(this.type) {
         Sensor.TYPE_ACCELEROMETER,
         Sensor.TYPE_MAGNETIC_FIELD,
-        Sensor.TYPE_ORIENTATION,
         Sensor.TYPE_GYROSCOPE,
         Sensor.TYPE_LIGHT,
         Sensor.TYPE_PRESSURE,
-        Sensor.TYPE_TEMPERATURE,
         Sensor.TYPE_PROXIMITY,
         Sensor.TYPE_GRAVITY,
         Sensor.TYPE_LINEAR_ACCELERATION,

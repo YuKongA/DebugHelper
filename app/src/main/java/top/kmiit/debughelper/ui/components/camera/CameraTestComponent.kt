@@ -15,8 +15,11 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,8 +32,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -62,6 +69,7 @@ fun CameraTestComponent(
 
     val cameras by viewModel.cameras.collectAsState()
     val selectedCameraId by viewModel.selectedCameraId.collectAsState()
+    val torchState by viewModel.torchStates.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -81,6 +89,8 @@ fun CameraTestComponent(
         } else {
             viewModel.loadCameras()
         }
+        // Initialize helper once; real camera instance will be attached after preview binds.
+        viewModel.initializeTorchHelper()
     }
 
     Column(
@@ -139,11 +149,12 @@ fun CameraTestComponent(
 
                         try {
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
+                            val boundCamera = cameraProvider.bindToLifecycle(
                                 lifecycleOwner,
                                 cameraSelector,
                                 preview
                             )
+                            viewModel.onPreviewCameraBound(boundCamera)
                         } catch (e: Exception) {
                             Log.e(TAG, "Use case binding failed", e)
                         }
@@ -169,8 +180,15 @@ fun CameraTestComponent(
             CameraItem(
                 camera = camera,
                 isSelected = selectedCameraId == camera.id,
+                isTorchOn = torchState[camera.id] ?: false,
                 onSelect = {
                      viewModel.selectCamera(camera.id)
+                },
+                onTorchToggle = { enabled ->
+                    viewModel.toggleTorch(camera.id, enabled)
+                },
+                onTorchStrengthChange = { strength ->
+                    viewModel.setTorchStrength(camera.id, strength)
                 }
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -182,8 +200,13 @@ fun CameraTestComponent(
 fun CameraItem(
     camera: CameraInfoItem,
     isSelected: Boolean,
-    onSelect: () -> Unit
+    isTorchOn: Boolean,
+    onSelect: () -> Unit,
+    onTorchToggle: (Boolean) -> Unit,
+    onTorchStrengthChange: (Int) -> Unit
 ) {
+    var torchStrength by remember { mutableIntStateOf(1) }
+
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -200,15 +223,124 @@ fun CameraItem(
                 text = stringResource(R.string.orientation) + ": ${camera.sensorOrientation}°",
                 style = MiuixTheme.textStyles.body2
             )
+
+            // Torch configuration
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Torch: " + if (camera.torchConfig.supportsTorch) "✓" else "✗",
+                style = MiuixTheme.textStyles.body2
+            )
+            Text(
+                text = "Flash Strength Control: " + if (camera.torchConfig.supportsFlashStrengthControl) "✓" else "✗",
+                style = MiuixTheme.textStyles.body2
+            )
+            if (camera.torchConfig.maxFlashStrength > 0) {
+                Text(
+                    text = "Max Flash Strength: ${camera.torchConfig.maxFlashStrength}",
+                    style = MiuixTheme.textStyles.body2
+                )
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = onSelect,
-                enabled = !isSelected
+            // Camera preview button and torch test button
+            Row(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                 Text(if (isSelected)
-                        stringResource(R.string.previewing)
-                    else stringResource(R.string.preview))
+                Button(
+                    onClick = onSelect,
+                    enabled = !isSelected,
+                    modifier = Modifier.weight(1f).padding(end = 4.dp)
+                ) {
+                     Text(if (isSelected)
+                            stringResource(R.string.previewing)
+                        else stringResource(R.string.preview))
+                }
+
+                // Torch test button
+                if (camera.torchConfig.supportsTorch) {
+                    Button(
+                        onClick = { onTorchToggle(!isTorchOn) },
+                        modifier = Modifier.weight(1f).padding(start = 4.dp)
+                    ) {
+                        Text(if (isTorchOn) "Torch: ON ✓" else "Torch: OFF")
+                    }
+                }
+            }
+
+            // Flash strength control (if supported)
+            if (camera.torchConfig.supportsFlashStrengthControl && camera.torchConfig.maxFlashStrength > 0 && isTorchOn) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Flash Strength: $torchStrength / ${camera.torchConfig.maxFlashStrength}",
+                    style = MiuixTheme.textStyles.body2
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Slider-like control using buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = {
+                            if (torchStrength > 1) {
+                                torchStrength--
+                                onTorchStrengthChange(torchStrength)
+                            }
+                        },
+                        enabled = torchStrength > 1,
+                        modifier = Modifier.weight(0.2f)
+                    ) {
+                        Text("-")
+                    }
+
+                    Spacer(modifier = Modifier.padding(4.dp))
+
+                    // Strength display bar
+                    Box(
+                        modifier = Modifier
+                            .weight(0.6f)
+                            .height(32.dp)
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp)
+                        ) {
+                            repeat(camera.torchConfig.maxFlashStrength) { index ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .padding(1.dp)
+                                        .then(
+                                            if (index < torchStrength) {
+                                                Modifier.background(Color.Green)
+                                            } else {
+                                                Modifier.border(1.dp, Color.Gray)
+                                            }
+                                        )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.padding(4.dp))
+
+                    Button(
+                        onClick = {
+                            if (torchStrength < camera.torchConfig.maxFlashStrength) {
+                                torchStrength++
+                                onTorchStrengthChange(torchStrength)
+                            }
+                        },
+                        enabled = torchStrength < camera.torchConfig.maxFlashStrength,
+                        modifier = Modifier.weight(0.2f)
+                    ) {
+                        Text("+")
+                    }
+                }
             }
         }
     }

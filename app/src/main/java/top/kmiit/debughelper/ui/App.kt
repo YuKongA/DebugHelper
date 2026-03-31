@@ -3,16 +3,14 @@ package top.kmiit.debughelper.ui
 import android.hardware.Sensor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import top.kmiit.debughelper.ui.components.NavigationBar
+import top.kmiit.debughelper.ui.components.NavigationController
+import top.kmiit.debughelper.ui.components.AppNavKey
 import top.kmiit.debughelper.ui.components.TopAppBar
-import top.kmiit.debughelper.ui.pages.AboutPage
-import top.kmiit.debughelper.ui.pages.InfoPage
-import top.kmiit.debughelper.ui.pages.SensorTestPage
-import top.kmiit.debughelper.ui.pages.TestPage
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -26,22 +24,38 @@ fun App(
         controller = ThemeController(ColorSchemeMode.System),
     ) {
         val scrollBehavior = MiuixScrollBehavior()
-        var selectedIndex by remember { mutableIntStateOf(0) }
-        var sensorTest by remember { mutableStateOf<Sensor?>(null) }
+        val backStack = remember { mutableStateListOf<AppNavKey>(AppNavKey.Info) }
+        var selectedSensor by remember { mutableStateOf<Sensor?>(null) }
+        val currentRoute = backStack.lastOrNull() ?: AppNavKey.Info
 
-        if (sensorTest != null) {
-            SensorTestPage(sensor = sensorTest!!, onBack = { sensorTest = null })
-        } else {
-            Scaffold(
-                topBar = { TopAppBar(scrollBehavior) },
-                bottomBar = { NavigationBar(selectedIndex) { newIndex -> selectedIndex = newIndex } }
-            ) { paddingValues ->
-                when (selectedIndex) {
-                    0 -> InfoPage(paddingValues, scrollBehavior)
-                    1 -> TestPage(paddingValues, scrollBehavior, onTestSensor = { sensorTest = it })
-                    2 -> AboutPage(paddingValues, scrollBehavior)
+        Scaffold(
+            topBar = {
+                if (currentRoute != AppNavKey.SensorTest) {
+                    TopAppBar(scrollBehavior)
                 }
+            },
+            bottomBar = {
+                NavigationBar(
+                    currentRoute = currentRoute,
+                    onNavigate = { targetRoute ->
+                        selectedSensor = null
+                        if (backStack.lastOrNull() != targetRoute) {
+                            backStack.clear()
+                            backStack.add(targetRoute)
+                        }
+                    }
+                )
             }
+        ) { paddingValues ->
+            NavigationController(
+                backStack = backStack,
+                selectedSensor = selectedSensor,
+                paddingValues = paddingValues,
+                scrollBehavior = scrollBehavior,
+                onSelectedSensorChange = { sensor ->
+                    selectedSensor = sensor
+                }
+            )
         }
     }
 }
