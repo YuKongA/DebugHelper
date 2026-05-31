@@ -8,10 +8,7 @@ pub fn getVulkanVersionNative<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
 ) -> jstring {
-    let version_str = match get_physical_device_version() {
-        Ok(v) => v,
-        Err(_) => "unknown".to_string(),
-    };
+    let version_str = get_physical_device_version().unwrap_or_else(|_| "unknown".to_string());
 
     env.with_env(|env| env.new_string(version_str).map(|s| s.into_raw()))
         .resolve::<jni::errors::ThrowRuntimeExAndDefault>()

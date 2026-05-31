@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 [dependencies]
 jni = "0.22.4"
 jni_fn = "0.1.2"
-vulkano = "0.35.0"
+vulkano = "0.35.2"
